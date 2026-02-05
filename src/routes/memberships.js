@@ -216,4 +216,96 @@ router.post('/referral', async (req, res) => {
     }
 });
 
+// POST submit reward claim
+router.post('/claim', async (req, res) => {
+    try {
+        const claimData = req.body;
+        const { type, email, membershipId } = claimData;
+
+        // Verify membership exists and is eligible
+        const membership = await getItem(TABLES.MEMBERSHIPS, { email });
+        if (!membership) {
+            return res.status(404).json({ error: 'Membership not found' });
+        }
+
+        // Create claim record
+        const claim = {
+            id: uuidv4(),
+            ...claimData,
+            status: 'pending',
+            submittedAt: new Date().toISOString()
+        };
+
+        await putItem(TABLES.REWARD_CLAIMS, claim);
+
+        // Update membership status to indicate claim is in progress
+        if (type === 'cashback') {
+            membership.moneyBackClaimed = 'pending_admin';
+        } else if (type === 'gold') {
+            membership.goldCoinClaimed = 'pending_admin';
+            // If they are applying for Gold, they have already reached 7 referrals
+            // and their status is likely already 'completed'.
+        }
+
+        await putItem(TABLES.MEMBERSHIPS, membership);
+
+        res.status(201).json(claim);
+    } catch (error) {
+        console.error('Error submitting reward claim:', error);
+        res.status(500).json({ error: 'Failed to submit reward claim' });
+    }
+});
+
+// GET all reward claims (admin)
+router.get('/claims', async (req, res) => {
+    try {
+        const claims = await scanTable(TABLES.REWARD_CLAIMS);
+        // Sort by date, newest first
+        claims.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+        res.json(claims);
+    } catch (error) {
+        console.error('Error fetching reward claims:', error);
+        res.status(500).json({ error: 'Failed to fetch reward claims' });
+    }
+});
+
+// PUT update claim status (admin)
+router.put('/claim/:id/status', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status } = req.body; // 'pending', 'in_progress', 'completed', 'rejected'
+
+        // Get all claims and find the one with matching id
+        const claims = await scanTable(TABLES.REWARD_CLAIMS);
+        const claim = claims.find(c => c.id === id);
+
+        if (!claim) {
+            return res.status(404).json({ error: 'Claim not found' });
+        }
+
+        // Update claim status
+        claim.status = status;
+        claim.updatedAt = new Date().toISOString();
+        await putItem(TABLES.REWARD_CLAIMS, claim);
+
+        // If completed, update the membership record
+        if (status === 'completed') {
+            const membership = await getItem(TABLES.MEMBERSHIPS, { email: claim.email });
+            if (membership) {
+                if (claim.type === 'cashback') {
+                    membership.moneyBackClaimed = true;
+                } else if (claim.type === 'gold') {
+                    membership.goldCoinClaimed = true;
+                }
+                await putItem(TABLES.MEMBERSHIPS, membership);
+            }
+        }
+
+        res.json(claim);
+    } catch (error) {
+        console.error('Error updating claim status:', error);
+        res.status(500).json({ error: 'Failed to update claim status' });
+    }
+});
+
 module.exports = router;

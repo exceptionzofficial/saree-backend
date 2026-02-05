@@ -24,6 +24,7 @@ const TABLES = {
     USERS: 'Saree_Users',
     MEMBERSHIPS: 'Saree_Memberships',
     MEMBERSHIP_REQUESTS: 'Saree_MembershipRequests',
+    REWARD_CLAIMS: 'Saree_RewardClaims',
     SETTINGS: 'Saree_Settings'
 };
 

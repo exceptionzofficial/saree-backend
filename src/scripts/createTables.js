@@ -71,6 +71,12 @@ const tables = [
         KeySchema: [{ AttributeName: 'mobile', KeyType: 'HASH' }],
         AttributeDefinitions: [{ AttributeName: 'mobile', AttributeType: 'S' }],
         BillingMode: 'PAY_PER_REQUEST'
+    },
+    {
+        TableName: 'Saree_RewardClaims',
+        KeySchema: [{ AttributeName: 'id', KeyType: 'HASH' }],
+        AttributeDefinitions: [{ AttributeName: 'id', AttributeType: 'S' }],
+        BillingMode: 'PAY_PER_REQUEST'
     }
 ];
 
