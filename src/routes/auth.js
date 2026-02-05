@@ -104,4 +104,20 @@ router.get('/profile', async (req, res) => {
     }
 });
 
+// Get All Users (Admin)
+router.get('/users', async (req, res) => {
+    try {
+        const users = await scanTable(USERS_TABLE);
+        // Remove passwords from everything
+        const usersResponse = users.map(user => {
+            const { password, ...userWithoutPassword } = user;
+            return userWithoutPassword;
+        });
+        res.json(usersResponse || []);
+    } catch (error) {
+        console.error('Fetch users error:', error);
+        res.status(500).json({ error: 'Failed to fetch users' });
+    }
+});
+
 module.exports = router;

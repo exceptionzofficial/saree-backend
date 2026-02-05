@@ -151,11 +151,24 @@ router.put('/request/:id/approve', async (req, res) => {
                 );
 
                 if (referrer) {
+                    // Try to get mobile number from the user table if it's missing in request
+                    let mobileNumber = request.mobile;
+                    if (!mobileNumber) {
+                        try {
+                            const users = await scanTable(TABLES.USERS);
+                            const referredUser = users.find(u => u.email === request.email);
+                            if (referredUser) mobileNumber = referredUser.mobile;
+                        } catch (uErr) {
+                            console.warn('Could not fetch referred user mobile:', uErr.message);
+                        }
+                    }
+
                     // Update referrer's data
                     referrer.referralCount = (Number(referrer.referralCount) || 0) + 1;
                     referrer.referrals = referrer.referrals || [];
                     referrer.referrals.push({
                         name: request.name,
+                        mobile: mobileNumber || '',
                         email: request.email,
                         date: new Date().toISOString(),
                         type: 'membership' // Marked as membership referral (they paid!)
@@ -226,10 +239,22 @@ router.post('/referral', async (req, res) => {
             return res.status(404).json({ error: 'Invalid referral code' });
         }
 
+        // Try to get mobile number from the user table if it's requested
+        let mobileNumber = '';
+        try {
+            const users = await scanTable(TABLES.USERS);
+            const referredUser = users.find(u => u.name === referredUserName);
+            if (referredUser) mobileNumber = referredUser.mobile;
+        } catch (uErr) {
+            console.warn('Could not fetch referred user mobile:', uErr.message);
+        }
+
         // Add referral
         membership.referralCount += 1;
+        membership.referrals = membership.referrals || [];
         membership.referrals.push({
             name: referredUserName,
+            mobile: mobileNumber || '',
             date: new Date().toISOString()
         });
 
