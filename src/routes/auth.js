@@ -58,12 +58,8 @@ router.post('/register', async (req, res) => {
                         type: 'registration' // Marked as registration referral
                     });
 
-                    // Check milestones for referrer
-                    if (referrer.referralCount >= 5 && !referrer.moneyBackClaimed) {
-                        referrer.moneyBackClaimed = true;
-                    }
-                    if (referrer.referralCount >= 7 && !referrer.goldCoinClaimed) {
-                        referrer.goldCoinClaimed = true;
+                    // Check milestones for referrer - only update status, don't auto-claim
+                    if (referrer.referralCount >= 7 && referrer.status !== 'completed') {
                         referrer.status = 'completed';
                         referrer.completedAt = new Date().toISOString();
 

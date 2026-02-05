@@ -186,12 +186,9 @@ router.post('/referral', async (req, res) => {
             date: new Date().toISOString()
         });
 
-        // Check milestones
-        if (membership.referralCount >= 5 && !membership.moneyBackClaimed) {
-            membership.moneyBackClaimed = true;
-        }
-        if (membership.referralCount >= 7 && !membership.goldCoinClaimed) {
-            membership.goldCoinClaimed = true;
+        // Check milestones - only update status, don't auto-claim rewards
+        // User must submit claim form to get rewards
+        if (membership.referralCount >= 7 && membership.status !== 'completed') {
             membership.status = 'completed';
             membership.completedAt = new Date().toISOString();
 
