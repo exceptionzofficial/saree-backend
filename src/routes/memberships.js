@@ -140,6 +140,53 @@ router.put('/request/:id/approve', async (req, res) => {
         request.approvedAt = new Date().toISOString();
         await putItem(TABLES.MEMBERSHIP_REQUESTS, request);
 
+        // Credit the referrer if the new member used a referral code
+        if (request.referralCode) {
+            try {
+                const memberships = await scanTable(TABLES.MEMBERSHIPS);
+                const referrer = memberships.find(m =>
+                    m.referralCode &&
+                    m.referralCode.trim().toUpperCase() === request.referralCode.trim().toUpperCase() &&
+                    (m.status === 'active' || m.status === 'completed')
+                );
+
+                if (referrer) {
+                    // Update referrer's data
+                    referrer.referralCount = (Number(referrer.referralCount) || 0) + 1;
+                    referrer.referrals = referrer.referrals || [];
+                    referrer.referrals.push({
+                        name: request.name,
+                        email: request.email,
+                        date: new Date().toISOString(),
+                        type: 'membership' // Marked as membership referral (they paid!)
+                    });
+
+                    // Check milestones - only update status, don't auto-claim rewards
+                    if (referrer.referralCount >= 7 && referrer.status !== 'completed') {
+                        referrer.status = 'completed';
+                        referrer.completedAt = new Date().toISOString();
+
+                        // Reset referrer's isMember so they can become member again
+                        try {
+                            const users = await scanTable(TABLES.USERS);
+                            const referrerUser = users.find(u => u.email === referrer.email);
+                            if (referrerUser) {
+                                referrerUser.isMember = false;
+                                await putItem(TABLES.USERS, referrerUser);
+                            }
+                        } catch (uErr) {
+                            console.warn('Could not reset referrer isMember status:', uErr.message);
+                        }
+                    }
+
+                    await putItem(TABLES.MEMBERSHIPS, referrer);
+                    console.log(`Credited referrer ${referrer.email} with new referral from ${request.email}`);
+                }
+            } catch (refError) {
+                console.error('Error crediting referrer:', refError);
+            }
+        }
+
         res.json({ membership, request });
     } catch (error) {
         console.error('Error approving request:', error);

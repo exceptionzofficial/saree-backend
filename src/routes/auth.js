@@ -36,52 +36,9 @@ router.post('/register', async (req, res) => {
 
         await putItem(USERS_TABLE, newUser);
 
-        // Credit Referrer if they used a referral ID
-        if (referralId) {
-            try {
-                // Find all memberships to find one with matching referral code
-                const memberships = await scanTable(TABLES.MEMBERSHIPS);
-                const referrer = memberships.find(m =>
-                    m.referralCode &&
-                    m.referralCode.trim().toUpperCase() === referralId.trim().toUpperCase() &&
-                    m.status === 'active'
-                );
-
-                if (referrer) {
-                    // Update referrer's data
-                    referrer.referralCount = (Number(referrer.referralCount) || 0) + 1;
-                    referrer.referrals = referrer.referrals || [];
-                    referrer.referrals.push({
-                        name: name,
-                        email: email, // Optional: tracking who registered
-                        date: new Date().toISOString(),
-                        type: 'registration' // Marked as registration referral
-                    });
-
-                    // Check milestones for referrer - only update status, don't auto-claim
-                    if (referrer.referralCount >= 7 && referrer.status !== 'completed') {
-                        referrer.status = 'completed';
-                        referrer.completedAt = new Date().toISOString();
-
-                        // Reset referrer's isMember to false in Users table so they can become member again
-                        try {
-                            const users = await scanTable(TABLES.USERS);
-                            const referrerUser = users.find(u => u.email === referrer.email);
-                            if (referrerUser) {
-                                referrerUser.isMember = false;
-                                await putItem(TABLES.USERS, referrerUser);
-                            }
-                        } catch (uErr) {
-                            console.warn('Could not reset referrer isMember status:', uErr.message);
-                        }
-                    }
-
-                    await putItem(TABLES.MEMBERSHIPS, referrer);
-                }
-            } catch (refError) {
-                console.error('Error crediting referrer during registration:', refError);
-            }
-        }
+        // Note: Referral count is NOT credited here anymore.
+        // The referrer will get credit when this user becomes a member (pays membership fee).
+        // The referralId stored on the user is used during membership approval.
 
         // Create token
         const token = jwt.sign({ mobile: newUser.mobile, id: newUser.id }, JWT_SECRET, { expiresIn: '7d' });
