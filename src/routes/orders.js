@@ -4,6 +4,7 @@ const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
 const { TABLES, putItem, getItem, scanTable } = require('../services/dynamodb');
 const { uploadImage } = require('../services/s3');
+const { sendOrderConfirmation, sendNewOrderNotification, sendOrderStatusUpdate } = require('../services/email');
 
 // Configure multer for screenshot upload
 const upload = multer({
@@ -79,6 +80,11 @@ router.post('/', upload.single('paymentScreenshot'), async (req, res) => {
         };
 
         await putItem(TABLES.ORDERS, order);
+
+        // Send email notifications
+        sendOrderConfirmation(order);
+        sendNewOrderNotification(order);
+
         res.status(201).json(order);
     } catch (error) {
         console.error('Error creating order:', error);
@@ -108,6 +114,10 @@ router.put('/:orderId/status', async (req, res) => {
         order.updatedAt = new Date().toISOString();
 
         await putItem(TABLES.ORDERS, order);
+
+        // Send status update email to customer
+        sendOrderStatusUpdate(order);
+
         res.json(order);
     } catch (error) {
         console.error('Error updating order status:', error);

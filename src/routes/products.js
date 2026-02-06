@@ -46,7 +46,7 @@ router.get('/:id', async (req, res) => {
 // POST create new product with image upload
 router.post('/', upload.array('images', 5), async (req, res) => {
     try {
-        const { name, price, originalPrice, category, description, material, color, weight, blouseIncluded } = req.body;
+        const { name, price, originalPrice, category, description, material, color, weight, length, blouse, features, care, inStock, featured, bestseller } = req.body;
 
         // Upload images to S3
         const imageUrls = [];
@@ -69,11 +69,18 @@ router.post('/', upload.array('images', 5), async (req, res) => {
             category,
             description,
             material,
+            fabric: material, // Alias for compatibility
             color,
             weight,
-            blouseIncluded: blouseIncluded === 'true',
+            length,
+            blouse,
+            features: typeof features === 'string' ? JSON.parse(features) : (features || []),
+            care,
+            inStock: inStock === 'true' || inStock === true,
+            featured: featured === 'true' || featured === true,
+            bestseller: bestseller === 'true' || bestseller === true,
             images: imageUrls,
-            rating: 0,
+            rating: 4.5, // Default rating for now
             reviews: 0,
             createdAt: new Date().toISOString()
         };
@@ -89,7 +96,7 @@ router.post('/', upload.array('images', 5), async (req, res) => {
 // PUT update product
 router.put('/:id', upload.array('images', 5), async (req, res) => {
     try {
-        const { name, price, originalPrice, category, description, material, color, weight, blouseIncluded, existingImages } = req.body;
+        const { name, price, originalPrice, category, description, material, color, weight, length, blouse, features, care, inStock, featured, bestseller, existingImages } = req.body;
 
         // Get existing product
         const existingProduct = await getItem(TABLES.PRODUCTS, { id: req.params.id });
@@ -120,9 +127,16 @@ router.put('/:id', upload.array('images', 5), async (req, res) => {
             category,
             description,
             material,
+            fabric: material, // Alias for compatibility
             color,
             weight,
-            blouseIncluded: blouseIncluded === 'true',
+            length,
+            blouse,
+            features: typeof features === 'string' ? JSON.parse(features) : (features || []),
+            care,
+            inStock: inStock === 'true' || inStock === true,
+            featured: featured === 'true' || featured === true,
+            bestseller: bestseller === 'true' || bestseller === true,
             images: imageUrls,
             updatedAt: new Date().toISOString()
         };

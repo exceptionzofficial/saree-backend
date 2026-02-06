@@ -4,6 +4,12 @@ const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
 const { TABLES, putItem, getItem, scanTable, deleteItem } = require('../services/dynamodb');
 const { uploadImage } = require('../services/s3');
+const {
+    sendMembershipRequestNotification,
+    sendMembershipApprovalNotification,
+    sendRewardClaimNotification,
+    sendRewardClaimStatusUpdate
+} = require('../services/email');
 
 // Configure multer for screenshot upload
 const upload = multer({
@@ -68,10 +74,14 @@ router.post('/request', upload.single('screenshot'), async (req, res) => {
     try {
         const { name, email, mobile, referralCode } = req.body;
 
-        // Check if already has active membership
+        // Check if already has active membership (but allow if cycle is complete)
         const existingMembership = await getItem(TABLES.MEMBERSHIPS, { email });
         if (existingMembership && existingMembership.status === 'active') {
-            return res.status(400).json({ error: 'Already have an active membership' });
+            // Allow if both rewards are claimed (cycle complete - renewal allowed)
+            const isCycleComplete = existingMembership.moneyBackClaimed === true && existingMembership.goldCoinClaimed === true;
+            if (!isCycleComplete) {
+                return res.status(400).json({ error: 'Already have an active membership' });
+            }
         }
 
         // Upload screenshot
@@ -92,6 +102,10 @@ router.post('/request', upload.single('screenshot'), async (req, res) => {
         };
 
         await putItem(TABLES.MEMBERSHIP_REQUESTS, request);
+
+        // Send notification to admin
+        sendMembershipRequestNotification(request);
+
         res.status(201).json(request);
     } catch (error) {
         console.error('Error submitting request:', error);
@@ -107,19 +121,54 @@ router.put('/request/:id/approve', async (req, res) => {
             return res.status(404).json({ error: 'Request not found' });
         }
 
-        // Create membership
-        const membership = {
-            email: request.email,
-            name: request.name,
-            mobile: request.mobile,
-            referralCode: generateReferralCode(request.name),
-            referralCount: 0,
-            referrals: [],
-            moneyBackClaimed: false,
-            goldCoinClaimed: false,
-            status: 'active',
-            activatedAt: new Date().toISOString()
-        };
+        // Check if user already has a membership (renewal case)
+        const existingMembership = await getItem(TABLES.MEMBERSHIPS, { email: request.email });
+
+        let membership;
+
+        if (existingMembership && existingMembership.moneyBackClaimed === true && existingMembership.goldCoinClaimed === true) {
+            // RENEWAL: Archive old data and reset membership
+            const membershipHistory = existingMembership.history || [];
+            membershipHistory.push({
+                cycleNumber: membershipHistory.length + 1,
+                referralCode: existingMembership.referralCode,
+                referralCount: existingMembership.referralCount,
+                referrals: existingMembership.referrals,
+                moneyBackClaimed: existingMembership.moneyBackClaimed,
+                goldCoinClaimed: existingMembership.goldCoinClaimed,
+                activatedAt: existingMembership.activatedAt,
+                completedAt: new Date().toISOString()
+            });
+
+            membership = {
+                ...existingMembership,
+                referralCode: generateReferralCode(request.name),
+                referralCount: 0,
+                referrals: [],
+                moneyBackClaimed: false,
+                goldCoinClaimed: false,
+                status: 'active',
+                activatedAt: new Date().toISOString(),
+                completedAt: null,
+                history: membershipHistory,
+                renewalCount: (existingMembership.renewalCount || 0) + 1
+            };
+            console.log(`Membership renewed for ${request.email}. New referral code: ${membership.referralCode}`);
+        } else {
+            // NEW MEMBER: Create fresh membership
+            membership = {
+                email: request.email,
+                name: request.name,
+                mobile: request.mobile,
+                referralCode: generateReferralCode(request.name),
+                referralCount: 0,
+                referrals: [],
+                moneyBackClaimed: false,
+                goldCoinClaimed: false,
+                status: 'active',
+                activatedAt: new Date().toISOString()
+            };
+        }
 
         await putItem(TABLES.MEMBERSHIPS, membership);
 
@@ -147,10 +196,14 @@ router.put('/request/:id/approve', async (req, res) => {
                 const referrer = memberships.find(m =>
                     m.referralCode &&
                     m.referralCode.trim().toUpperCase() === request.referralCode.trim().toUpperCase() &&
-                    (m.status === 'active' || m.status === 'completed')
+                    m.status === 'active'
                 );
 
-                if (referrer) {
+                // Check if referrer has completed their cycle (both rewards claimed)
+                if (referrer && referrer.moneyBackClaimed === true && referrer.goldCoinClaimed === true) {
+                    console.log(`Referral code ${request.referralCode} belongs to a completed membership - not crediting`);
+                    // Don't credit - the code is blocked until renewal
+                } else if (referrer) {
                     // Try to get mobile number from the user table if it's missing in request
                     let mobileNumber = request.mobile;
                     if (!mobileNumber) {
@@ -199,6 +252,9 @@ router.put('/request/:id/approve', async (req, res) => {
                 console.error('Error crediting referrer:', refError);
             }
         }
+
+        // Send approval email to customer
+        sendMembershipApprovalNotification(membership);
 
         res.json({ membership, request });
     } catch (error) {
@@ -285,7 +341,64 @@ router.post('/referral', async (req, res) => {
     }
 });
 
-// POST submit reward claim
+// POST renew membership (reset for new cycle)
+router.post('/renew', async (req, res) => {
+    try {
+        const { email } = req.body;
+
+        // Get existing membership
+        const membership = await getItem(TABLES.MEMBERSHIPS, { email });
+        if (!membership) {
+            return res.status(404).json({ error: 'Membership not found' });
+        }
+
+        // Check if eligible for renewal (both rewards must be claimed)
+        if (!(membership.moneyBackClaimed === true && membership.goldCoinClaimed === true)) {
+            return res.status(400).json({ error: 'Must complete current membership cycle before renewing' });
+        }
+
+        // Archive old membership data to history
+        const membershipHistory = membership.history || [];
+        membershipHistory.push({
+            cycleNumber: membershipHistory.length + 1,
+            referralCode: membership.referralCode,
+            referralCount: membership.referralCount,
+            referrals: membership.referrals,
+            moneyBackClaimed: membership.moneyBackClaimed,
+            goldCoinClaimed: membership.goldCoinClaimed,
+            activatedAt: membership.activatedAt,
+            completedAt: membership.completedAt || new Date().toISOString()
+        });
+
+        // Generate new referral code
+        const newReferralCode = generateReferralCode(membership.name);
+
+        // Reset membership for new cycle
+        membership.referralCode = newReferralCode;
+        membership.referralCount = 0;
+        membership.referrals = [];
+        membership.moneyBackClaimed = false;
+        membership.goldCoinClaimed = false;
+        membership.status = 'active';
+        membership.activatedAt = new Date().toISOString();
+        membership.completedAt = null;
+        membership.history = membershipHistory;
+        membership.renewalCount = (membership.renewalCount || 0) + 1;
+
+        await putItem(TABLES.MEMBERSHIPS, membership);
+
+        console.log(`Membership renewed for ${email}. New referral code: ${newReferralCode}`);
+
+        res.json({
+            success: true,
+            membership,
+            message: `Membership renewed! Your new referral code is ${newReferralCode}`
+        });
+    } catch (error) {
+        console.error('Error renewing membership:', error);
+        res.status(500).json({ error: 'Failed to renew membership' });
+    }
+});
 router.post('/claim', async (req, res) => {
     try {
         const claimData = req.body;
@@ -317,6 +430,9 @@ router.post('/claim', async (req, res) => {
         }
 
         await putItem(TABLES.MEMBERSHIPS, membership);
+
+        // Send notification to admin
+        sendRewardClaimNotification(claim, membership);
 
         res.status(201).json(claim);
     } catch (error) {
@@ -357,17 +473,24 @@ router.put('/claim/:id/status', async (req, res) => {
         claim.updatedAt = new Date().toISOString();
         await putItem(TABLES.REWARD_CLAIMS, claim);
 
-        // If completed, update the membership record
-        if (status === 'completed') {
-            const membership = await getItem(TABLES.MEMBERSHIPS, { email: claim.email });
-            if (membership) {
-                if (claim.type === 'cashback') {
-                    membership.moneyBackClaimed = true;
-                } else if (claim.type === 'gold') {
-                    membership.goldCoinClaimed = true;
-                }
-                await putItem(TABLES.MEMBERSHIPS, membership);
+        // Sync status to the membership record
+        const membership = await getItem(TABLES.MEMBERSHIPS, { email: claim.email });
+        if (membership) {
+            const statusValue = status === 'completed' ? true :
+                status === 'rejected' ? false :
+                    status; // 'pending_admin', 'in_progress'
+
+            if (claim.type === 'cashback') {
+                membership.moneyBackClaimed = statusValue;
+            } else if (claim.type === 'gold') {
+                membership.goldCoinClaimed = statusValue;
             }
+            await putItem(TABLES.MEMBERSHIPS, membership);
+        }
+
+        // Send status update email to customer if status changed to in_progress or completed
+        if (status === 'in_progress' || status === 'completed') {
+            sendRewardClaimStatusUpdate(claim, status);
         }
 
         res.json(claim);
