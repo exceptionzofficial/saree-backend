@@ -15,6 +15,36 @@ const defaultSettings = {
     shippingCharge: 99,
     freeShippingThreshold: 2000,
     membershipPrice: 999,
+    membershipPlans: [
+        {
+            id: 'premium',
+            name: 'Premium Member',
+            price: 999,
+            cashbackGoal: 5,
+            goldGoal: 7,
+            features: [
+                '✔ Unique Referral Code',
+                '✔ Refer & Earn Program',
+                '✔ Money Back for 5 Referrals',
+                '✔ Gold Coin for 7 Referrals',
+                'Priority Doorstep Delivery'
+            ]
+        },
+        {
+            id: 'elite',
+            name: 'Elite Member',
+            price: 1999,
+            cashbackGoal: 3,
+            goldGoal: 5,
+            features: [
+                '✔ Everything in Premium',
+                '✔ Faster Money Back (3 Referrals)',
+                '✔ Faster Gold Coin (5 Referrals)',
+                '✔ Personal Stylist Consultation',
+                '✔ Free Gift on Every Purchase'
+            ]
+        }
+    ],
     announcements: [],
     updatedAt: new Date().toISOString()
 };
