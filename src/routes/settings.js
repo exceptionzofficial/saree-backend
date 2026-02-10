@@ -20,7 +20,9 @@ const defaultSettings = {
             id: 'premium',
             name: 'Premium Member',
             price: 999,
+            cashbackEnabled: true,
             cashbackGoal: 5,
+            goldEnabled: true,
             goldGoal: 7,
             features: [
                 '✔ Unique Referral Code',
@@ -34,7 +36,9 @@ const defaultSettings = {
             id: 'elite',
             name: 'Elite Member',
             price: 1999,
+            cashbackEnabled: true,
             cashbackGoal: 3,
+            goldEnabled: true,
             goldGoal: 5,
             features: [
                 '✔ Everything in Premium',

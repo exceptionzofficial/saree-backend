@@ -121,7 +121,7 @@ router.put('/request/:id/approve', async (req, res) => {
         // Get plan details from settings
         const settings = await getItem('Saree_Settings', { key: 'store_settings' });
         const plan = settings?.membershipPlans?.find(p => p.id === request.planId) ||
-            { id: 'premium', cashbackGoal: 5, goldGoal: 7, name: 'Premium Member' };
+            { id: 'premium', cashbackEnabled: true, cashbackGoal: 5, goldEnabled: true, goldGoal: 7, name: 'Premium Member' };
 
         const existingMembership = await getItem(TABLES.MEMBERSHIPS, { email: request.email });
 
@@ -146,13 +146,15 @@ router.put('/request/:id/approve', async (req, res) => {
                 ...existingMembership,
                 planId: request.planId,
                 planName: plan.name,
+                cashbackEnabled: plan.cashbackEnabled !== false,
                 cashbackGoal: plan.cashbackGoal,
+                goldEnabled: plan.goldEnabled !== false,
                 goldGoal: plan.goldGoal,
                 referralCode: generateReferralCode(request.name),
                 referralCount: 0,
                 referrals: [],
-                moneyBackClaimed: false,
-                goldCoinClaimed: false,
+                moneyBackClaimed: plan.cashbackEnabled === false ? true : false,
+                goldCoinClaimed: plan.goldEnabled === false ? true : false,
                 status: 'active',
                 activatedAt: new Date().toISOString(),
                 completedAt: null,
@@ -167,13 +169,15 @@ router.put('/request/:id/approve', async (req, res) => {
                 mobile: request.mobile,
                 planId: request.planId,
                 planName: plan.name,
+                cashbackEnabled: plan.cashbackEnabled !== false,
                 cashbackGoal: plan.cashbackGoal,
+                goldEnabled: plan.goldEnabled !== false,
                 goldGoal: plan.goldGoal,
                 referralCode: generateReferralCode(request.name),
                 referralCount: 0,
                 referrals: [],
-                moneyBackClaimed: false,
-                goldCoinClaimed: false,
+                moneyBackClaimed: plan.cashbackEnabled === false ? true : false,
+                goldCoinClaimed: plan.goldEnabled === false ? true : false,
                 status: 'active',
                 activatedAt: new Date().toISOString()
             };
@@ -236,9 +240,10 @@ router.put('/request/:id/approve', async (req, res) => {
                         type: 'membership'
                     });
 
-                    // Check milestones - use dynamic goldGoal from membership
-                    const goldGoal = referrer.goldGoal || 7;
-                    if (referrer.referralCount >= goldGoal && referrer.status !== 'completed') {
+                    // Check milestones - use dynamic goals from membership
+                    // Determine the completion goal: use goldGoal if gold is enabled, else cashbackGoal
+                    const completionGoal = (referrer.goldEnabled !== false) ? (referrer.goldGoal || 7) : (referrer.cashbackGoal || 5);
+                    if (referrer.referralCount >= completionGoal && referrer.status !== 'completed') {
                         referrer.status = 'completed';
                         referrer.completedAt = new Date().toISOString();
 
@@ -306,9 +311,9 @@ router.post('/referral', async (req, res) => {
             date: new Date().toISOString()
         });
 
-        // Check milestones - use dynamic goldGoal from membership
-        const goldGoal = membership.goldGoal || 7;
-        if (membership.referralCount >= goldGoal && membership.status !== 'completed') {
+        // Check milestones - use dynamic goals from membership
+        const completionGoal = (membership.goldEnabled !== false) ? (membership.goldGoal || 7) : (membership.cashbackGoal || 5);
+        if (membership.referralCount >= completionGoal && membership.status !== 'completed') {
             membership.status = 'completed';
             membership.completedAt = new Date().toISOString();
 
