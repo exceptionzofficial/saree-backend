@@ -27,6 +27,7 @@ const membershipsRoutes = require('./src/routes/memberships');
 const categoriesRoutes = require('./src/routes/categories');
 const authRoutes = require('./src/routes/auth');
 const settingsRoutes = require('./src/routes/settings');
+const contactRoutes = require('./src/routes/contact');
 
 // API Routes
 app.use('/api/products', productsRoutes);
@@ -35,6 +36,7 @@ app.use('/api/memberships', membershipsRoutes);
 app.use('/api/categories', categoriesRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/contact', contactRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

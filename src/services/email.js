@@ -340,6 +340,54 @@ const sendRewardClaimNotification = async (claim, membership) => {
     }
 };
 
+// ==================== CONTACT FORM EMAIL ====================
+
+// Send contact form notification to admin
+const sendContactFormNotification = async ({ name, email, phone, subject, message }) => {
+    try {
+        const subjectLabels = {
+            product: 'Product Inquiry',
+            order: 'Order Related',
+            return: 'Returns & Refunds',
+            feedback: 'Feedback',
+            other: 'Other'
+        };
+
+        const content = `
+            <p>You have received a new message from the Contact Us form on your website.</p>
+            
+            <div class="info-box">
+                <strong>Name:</strong> ${name}<br>
+                <strong>Email:</strong> <a href="mailto:${email}">${email}</a><br>
+                <strong>Phone:</strong> <a href="tel:${phone}">${phone}</a><br>
+                <strong>Subject:</strong> ${subjectLabels[subject] || subject}<br>
+                <strong>Date:</strong> ${new Date().toLocaleString('en-IN', { dateStyle: 'long', timeStyle: 'short' })}
+            </div>
+
+            <h3>Message</h3>
+            <div class="info-box" style="white-space: pre-wrap;">
+                ${message}
+            </div>
+
+            <p>You can reply directly to this email to respond to the customer.</p>
+        `;
+
+        await transporter.sendMail({
+            from: `"${STORE_NAME}" <${process.env.EMAIL_USER}>`,
+            to: ADMIN_EMAIL,
+            replyTo: email,
+            subject: `📩 New Contact Message - ${subjectLabels[subject] || subject} from ${name}`,
+            html: getEmailTemplate('New Contact Form Message', content)
+        });
+
+        console.log(`Contact form notification sent to admin from ${email}`);
+        return true;
+    } catch (error) {
+        console.error('Error sending contact form notification:', error.message);
+        throw error;
+    }
+};
+
 // Send reward claim status update to customer
 const sendRewardClaimStatusUpdate = async (claim, status) => {
     try {
@@ -391,5 +439,6 @@ module.exports = {
     sendMembershipRequestNotification,
     sendMembershipApprovalNotification,
     sendRewardClaimNotification,
-    sendRewardClaimStatusUpdate
+    sendRewardClaimStatusUpdate,
+    sendContactFormNotification
 };
