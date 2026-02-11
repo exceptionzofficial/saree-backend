@@ -65,10 +65,10 @@ const authenticateAdmin = (req, res, next) => {
     }
 };
 
-// Change Password
-router.put('/change-password', authenticateAdmin, async (req, res) => {
+// Update Credentials (Username and/or Password)
+router.put('/update-credentials', authenticateAdmin, async (req, res) => {
     try {
-        const { currentPassword, newPassword } = req.body;
+        const { currentPassword, newUsername, newPassword } = req.body;
 
         const adminCredentials = await getItem(TABLES.SETTINGS, { key: 'admin_credentials' });
         if (!adminCredentials) {
@@ -81,22 +81,29 @@ router.put('/change-password', authenticateAdmin, async (req, res) => {
             return res.status(400).json({ error: 'Incorrect current password' });
         }
 
-        // Hash new password
-        const hashedNewPassword = await bcrypt.hash(newPassword, 10);
-
-        // Update in database
+        // Update object
         const updatedAdmin = {
             ...adminCredentials,
-            password: hashedNewPassword,
             updatedAt: new Date().toISOString()
         };
 
+        if (newUsername) {
+            updatedAdmin.username = newUsername;
+        }
+
+        if (newPassword) {
+            updatedAdmin.password = await bcrypt.hash(newPassword, 10);
+        }
+
         await putItem(TABLES.SETTINGS, updatedAdmin);
 
-        res.json({ message: 'Password updated successfully' });
+        res.json({
+            message: 'Credentials updated successfully',
+            user: { username: updatedAdmin.username }
+        });
     } catch (error) {
-        console.error('Change password error:', error);
-        res.status(500).json({ error: 'Failed to change password' });
+        console.error('Update credentials error:', error);
+        res.status(500).json({ error: 'Failed to update credentials' });
     }
 });
 
