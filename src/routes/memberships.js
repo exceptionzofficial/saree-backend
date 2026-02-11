@@ -72,7 +72,7 @@ router.get('/request/:email', async (req, res) => {
 // POST submit payment request
 router.post('/request', upload.single('screenshot'), async (req, res) => {
     try {
-        const { name, email, mobile, referralCode, planId } = req.body;
+        const { name, email, mobile, referralCode, planId, selectedSarees } = req.body;
 
         // Check if already has active membership
         const existingMembership = await getItem(TABLES.MEMBERSHIPS, { email });
@@ -96,6 +96,7 @@ router.post('/request', upload.single('screenshot'), async (req, res) => {
             mobile,
             referralCode: referralCode || '',
             planId: planId || 'premium', // Default to premium for backward compatibility
+            selectedSarees: typeof selectedSarees === 'string' ? JSON.parse(selectedSarees) : (selectedSarees || []),
             screenshotUrl,
             status: 'pending',
             submittedAt: new Date().toISOString()
@@ -178,6 +179,7 @@ router.put('/request/:id/approve', async (req, res) => {
                 referrals: [],
                 moneyBackClaimed: plan.cashbackEnabled === false ? true : false,
                 goldCoinClaimed: plan.goldEnabled === false ? true : false,
+                selectedSarees: request.selectedSarees || [],
                 status: 'active',
                 activatedAt: new Date().toISOString()
             };
