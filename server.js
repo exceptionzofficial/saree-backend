@@ -28,6 +28,7 @@ const categoriesRoutes = require('./src/routes/categories');
 const authRoutes = require('./src/routes/auth');
 const settingsRoutes = require('./src/routes/settings');
 const contactRoutes = require('./src/routes/contact');
+const adminAuthRoutes = require('./src/routes/adminAuth');
 
 // API Routes
 app.use('/api/products', productsRoutes);
@@ -37,6 +38,7 @@ app.use('/api/categories', categoriesRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/contact', contactRoutes);
+app.use('/api/admin/auth', adminAuthRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
